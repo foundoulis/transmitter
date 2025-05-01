@@ -15,3 +15,6 @@
 # - Must use Git/Github for version control
 # - Cannot use external libraries, only Python standard library
 # - Must handle command line arguments
+
+# ### Protocol
+# - Recieve the number of chunks as an encoded 64 byte integer, at 4096 bytes per chunk this 
