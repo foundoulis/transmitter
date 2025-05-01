@@ -1,8 +1,6 @@
 import argparse
 import logging
 import socket
-from typing import List
-
 import sys
 
 
@@ -46,19 +44,19 @@ def send_file(filename, ip, port):
     # Read the file in chunks and store in FILE
     logging.debug(f"Sending file: {filename} to {ip}:{port}")
     try:
-        FILE: List[bytes] = []
+        chunks: list[bytes] = []
         with open(filename, "rb") as file:
             # Read the file in chunks and append to FILE
             while chunk := file.read(4096):
-                FILE.append(chunk)
-        FILE_SIZE: int = len(FILE) * 4096
+                chunks.append(chunk)
+        number_of_chunks: int = len(chunks)
     except FileNotFoundError:
         logging.error(f"File not found: {filename}")
         return
     except Exception as e:
         logging.error(f"Error reading file: {e}")
         return
-    logging.debug(f"File size: {FILE_SIZE} bytes")
+    logging.debug(f"File size: {number_of_chunks * 4096} bytes")
 
     # Listen on the specified IP and port
     logging.debug(f"Listening on {ip}:{port}")
@@ -81,14 +79,12 @@ def send_file(filename, ip, port):
         conn, addr = sock.accept()
         logging.debug(f"Connection established with {addr}")
         try:
-            # Send the file size first
-            conn.sendall(str(FILE_SIZE).encode())
+            # Send the file size first, always 1024 bytes long.
+            conn.sendall(number_of_chunks.to_bytes(64, "big"))
             # Send the file chunks
-            for chunk in FILE:
+            for chunk in chunks:
                 conn.sendall(chunk)
             logging.debug("File sent successfully.")
-        except Exception as e:
-            logging.error(f"Error sending file: {e}")
         finally:
             conn.close()
             logging.debug("Connection closed.")
@@ -119,19 +115,19 @@ def receive_file(filename, ip, port):
     while True:
         try:
             # Receive the file size first
-            file_size = sock.recv(1024).decode()
-            if not file_size:
+            number_of_chunks = sock.recv(64)
+            if not number_of_chunks:
                 break
-            file_size = int(file_size)
-            logging.debug(f"File size: {file_size} bytes")
+            number_of_chunks = int.from_bytes(number_of_chunks, "big")
+            logging.debug(f"File size: {number_of_chunks*4096} bytes")
 
             # Receive the file chunks
             with open(filename, "wb") as file:
-                received_bytes = 0
-                while received_bytes < file_size:
+                recieved_chuncks_count = 0
+                while recieved_chuncks_count < number_of_chunks:
                     progress_bar(
-                        received_bytes,
-                        file_size,
+                        recieved_chuncks_count,
+                        number_of_chunks,
                         prefix="Progress:",
                         suffix="Complete",
                         length=50,
@@ -140,18 +136,15 @@ def receive_file(filename, ip, port):
                     if not chunk:
                         break
                     file.write(chunk)
-                    received_bytes += len(chunk)
-                    logging.debug(f"Received {received_bytes} bytes")
-            logging.debug("File received successfully.")
+                    recieved_chuncks_count += 1
             progress_bar(
-                file_size,
-                file_size,
+                number_of_chunks,
+                number_of_chunks,
                 prefix="Progress:",
                 suffix="Complete",
                 length=50,
             )
-        except Exception as e:
-            logging.error(f"Error receiving file: {e}")
+            logging.debug("File received successfully.")
         finally:
             sock.close()
             logging.debug("Connection closed.")
